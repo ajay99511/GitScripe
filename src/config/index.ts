@@ -1,0 +1,71 @@
+import 'dotenv/config';
+import { z } from 'zod';
+
+const ConfigSchema = z.object({
+  // GitHub
+  githubToken: z.string().min(1, 'GITHUB_TOKEN is required'),
+
+  // LLM
+  llmProvider: z.enum(['openai', 'anthropic', 'ollama']).default('openai'),
+  llmModel: z.string().default('gpt-4o-mini'),
+  llmEmbeddingModel: z.string().default('text-embedding-3-small'),
+  openaiApiKey: z.string().min(1, 'OPENAI_API_KEY is required'),
+
+  // Database
+  databaseUrl: z.string().url('DATABASE_URL must be a valid URL'),
+
+  // Redis
+  redisUrl: z.string().default('redis://localhost:6379'),
+
+  // MinIO / S3
+  minioEndpoint: z.string().default('localhost'),
+  minioPort: z.coerce.number().default(9000),
+  minioAccessKey: z.string().default('minioadmin'),
+  minioSecretKey: z.string().default('minioadmin'),
+  minioBucket: z.string().default('gitscribe-diffs'),
+  minioUseSsl: z
+    .string()
+    .transform((v) => v === 'true')
+    .default('false'),
+
+  // App
+  port: z.coerce.number().default(3000),
+  nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
+  maxConcurrentWorkers: z.coerce.number().int().min(1).max(10).default(3),
+  webhookSecret: z.string().optional(),
+});
+
+function loadConfig() {
+  const result = ConfigSchema.safeParse({
+    githubToken: process.env.GITHUB_TOKEN,
+    llmProvider: process.env.LLM_PROVIDER,
+    llmModel: process.env.LLM_MODEL,
+    llmEmbeddingModel: process.env.LLM_EMBEDDING_MODEL,
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    databaseUrl: process.env.DATABASE_URL,
+    redisUrl: process.env.REDIS_URL,
+    minioEndpoint: process.env.MINIO_ENDPOINT,
+    minioPort: process.env.MINIO_PORT,
+    minioAccessKey: process.env.MINIO_ACCESS_KEY,
+    minioSecretKey: process.env.MINIO_SECRET_KEY,
+    minioBucket: process.env.MINIO_BUCKET,
+    minioUseSsl: process.env.MINIO_USE_SSL,
+    port: process.env.PORT,
+    nodeEnv: process.env.NODE_ENV,
+    maxConcurrentWorkers: process.env.MAX_CONCURRENT_WORKERS,
+    webhookSecret: process.env.WEBHOOK_SECRET,
+  });
+
+  if (!result.success) {
+    console.error('❌ Invalid environment configuration:');
+    for (const issue of result.error.issues) {
+      console.error(`  → ${issue.path.join('.')}: ${issue.message}`);
+    }
+    process.exit(1);
+  }
+
+  return result.data;
+}
+
+export type AppConfig = z.infer<typeof ConfigSchema>;
+export const config = loadConfig();

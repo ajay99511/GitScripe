@@ -1,0 +1,44 @@
+{
+  "name": "gitscribe",
+  "version": "1.0.0",
+  "description": "Self-hosted agentic intelligence layer over GitHub repositories",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push"
+  },
+  "dependencies": {
+    "@octokit/rest": "^21.1.0",
+    "bullmq": "^5.34.0",
+    "ioredis": "^5.4.0",
+    "@prisma/client": "^6.4.0",
+    "fastify": "^5.2.0",
+    "@fastify/cors": "^10.0.0",
+    "socket.io": "^4.8.0",
+    "openai": "^4.82.0",
+    "minio": "^8.0.0",
+    "zod": "^3.24.0",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "dotenv": "^16.4.0",
+    "@langchain/langgraph": "^0.2.0",
+    "@langchain/core": "^0.3.0",
+    "@langchain/openai": "^0.4.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.4.0",
+    "@bull-board/api": "^6.5.0",
+    "@bull-board/fastify": "^6.5.0",
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

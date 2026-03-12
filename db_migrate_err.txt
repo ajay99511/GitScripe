@@ -1,0 +1,15 @@
+
+> gitscribe@1.0.0 db:migrate
+> prisma migrate dev
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "gitscribe", schema "public" at "localhost:5432"
+
+Error: P3006
+
+Migration `00_extensions` failed to apply cleanly to the shadow database. 
+Error code: P1014
+Error:
+The underlying table for model `summaries` does not exist.
+

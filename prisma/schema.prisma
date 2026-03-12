@@ -1,0 +1,120 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector"), uuidOssp(map: "uuid-ossp")]
+}
+
+// ─── Enums ───────────────────────────────────────────────
+
+enum RepoStatus {
+  idle
+  syncing
+  error
+}
+
+enum SummaryStatus {
+  pending
+  processing
+  done
+  failed
+}
+
+enum RiskLevel {
+  low
+  medium
+  high
+}
+
+// ─── Models ──────────────────────────────────────────────
+
+model Repository {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  githubUrl     String     @unique
+  owner         String     @db.VarChar(255)
+  name          String     @db.VarChar(255)
+  branch        String     @db.VarChar(255)
+  lastSyncedSha String?    @db.VarChar(40)
+  status        RepoStatus @default(idle)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  commits   Commit[]
+  summaries Summary[]
+
+  @@index([owner, name])
+  @@map("repositories")
+}
+
+model Commit {
+  sha          String   @id @db.VarChar(40)
+  repoId       String   @db.Uuid
+  authorName   String   @db.VarChar(255)
+  authorEmail  String   @db.VarChar(255)
+  message      String   @db.Text
+  committedAt  DateTime
+  filesChanged Json     @default("[]") // JSONB array of file paths
+  additions    Int      @default(0)
+  deletions    Int      @default(0)
+  diffObjectKey String? @db.VarChar(512)
+  createdAt    DateTime @default(now())
+
+  repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  summary    Summary?
+
+  @@index([repoId])
+  @@index([committedAt])
+  @@index([repoId, committedAt])
+  @@map("commits")
+}
+
+model Summary {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  commitSha       String        @unique @db.VarChar(40)
+  repoId          String        @db.Uuid
+  shortSummary    String        @db.Text
+  detailedSummary String        @db.Text
+  inferredIntent  String        @db.Text
+  fileSummaries   Json          @default("{}") // JSONB: { "path": "summary" }
+  moduleSummaries Json          @default("{}") // JSONB: { "dir/": "summary" }
+  tags            Json          @default("[]") // JSONB array of tag strings
+  riskLevel       RiskLevel     @default(low)
+  qualityScore    Float?
+  llmModel        String?       @db.VarChar(100)
+  processingMs    Int?
+  status          SummaryStatus @default(pending)
+  errorMessage    String?       @db.Text
+  createdAt       DateTime      @default(now())
+
+  // NOTE: embedding VECTOR(1536) column is added via raw SQL migration
+  // Prisma does not natively support pgvector types yet
+
+  commit     Commit     @relation(fields: [commitSha], references: [sha], onDelete: Cascade)
+  repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@index([repoId])
+  @@index([commitSha])
+  @@index([repoId, status])
+  @@map("summaries")
+}
+
+model ConceptLink {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  concept    String @db.VarChar(255)
+  commitSha  String @db.VarChar(40)
+  repoId     String @db.Uuid
+  confidence Float  @default(1.0)
+  createdAt  DateTime @default(now())
+
+  @@index([concept])
+  @@index([repoId])
+  @@index([commitSha])
+  @@map("concept_links")
+}
