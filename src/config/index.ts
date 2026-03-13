@@ -5,11 +5,20 @@ const ConfigSchema = z.object({
   // GitHub
   githubToken: z.string().min(1, 'GITHUB_TOKEN is required'),
 
-  // LLM
-  llmProvider: z.enum(['openai', 'anthropic', 'ollama']).default('openai'),
+  // LLM Chat
+  llmProvider: z.enum(['openai', 'anthropic', 'gemini', 'ollama']).default('openai'),
   llmModel: z.string().default('gpt-4o-mini'),
+  llmBaseUrl: z.string().optional(),
+  
+  // LLM Embeddings
+  embeddingProvider: z.enum(['openai', 'gemini', 'ollama']).default('openai'),
   llmEmbeddingModel: z.string().default('text-embedding-3-small'),
-  openaiApiKey: z.string().min(1, 'OPENAI_API_KEY is required'),
+  
+  // API Keys (made optional, validated at runtime based on provider)
+  openaiApiKey: z.string().optional(),
+  anthropicApiKey: z.string().optional(),
+  geminiApiKey: z.string().optional(),
+  ollamaBaseUrl: z.string().default('http://localhost:11434'),
 
   // Database
   databaseUrl: z.string().url('DATABASE_URL must be a valid URL'),
@@ -40,8 +49,13 @@ function loadConfig() {
     githubToken: process.env.GITHUB_TOKEN,
     llmProvider: process.env.LLM_PROVIDER,
     llmModel: process.env.LLM_MODEL,
+    llmBaseUrl: process.env.LLM_BASE_URL,
+    embeddingProvider: process.env.EMBEDDING_PROVIDER,
     llmEmbeddingModel: process.env.LLM_EMBEDDING_MODEL,
     openaiApiKey: process.env.OPENAI_API_KEY,
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    geminiApiKey: process.env.GEMINI_API_KEY,
+    ollamaBaseUrl: process.env.OLLAMA_BASE_URL,
     databaseUrl: process.env.DATABASE_URL,
     redisUrl: process.env.REDIS_URL,
     minioEndpoint: process.env.MINIO_ENDPOINT,

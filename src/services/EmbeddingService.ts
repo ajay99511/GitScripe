@@ -1,19 +1,16 @@
-import OpenAI from 'openai';
 import pino from 'pino';
+import { Embeddings } from '@langchain/core/embeddings';
 
 const logger = pino({ name: 'EmbeddingService' });
 
 /**
- * Service for generating text embeddings via OpenAI's API.
- * Uses text-embedding-3-small (1536 dimensions) by default.
+ * Service for generating text embeddings using LangChain's Embeddings interface.
  */
 export class EmbeddingService {
-  private openai: OpenAI;
-  private model: string;
+  private embeddings: Embeddings;
 
-  constructor(openai: OpenAI, model: string = 'text-embedding-3-small') {
-    this.openai = openai;
-    this.model = model;
+  constructor(embeddings: Embeddings) {
+    this.embeddings = embeddings;
   }
 
   /**
@@ -21,53 +18,26 @@ export class EmbeddingService {
    */
   async embed(text: string): Promise<number[]> {
     try {
-      const response = await this.openai.embeddings.create({
-        model: this.model,
-        input: text,
-      });
-
-      return response.data[0].embedding;
+      return await this.embeddings.embedQuery(text);
     } catch (error) {
-      logger.error({ error, model: this.model }, 'Embedding failed');
+      logger.error({ error }, 'Embedding failed');
       throw error;
     }
   }
 
   /**
-   * Generate embeddings for multiple texts in a single API call.
-   * More efficient for bulk processing during initial sync.
+   * Generate embeddings for multiple texts in a single call.
    */
   async batchEmbed(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) return [];
 
-    // OpenAI supports up to ~2048 inputs per batch; chunk if needed
-    const maxBatchSize = 500;
-    const allEmbeddings: number[][] = [];
-
-    for (let i = 0; i < texts.length; i += maxBatchSize) {
-      const batch = texts.slice(i, i + maxBatchSize);
-
-      try {
-        const response = await this.openai.embeddings.create({
-          model: this.model,
-          input: batch,
-        });
-
-        const embeddings = response.data
-          .sort((a, b) => a.index - b.index)
-          .map((d) => d.embedding);
-
-        allEmbeddings.push(...embeddings);
-      } catch (error) {
-        logger.error(
-          { error, batchStart: i, batchSize: batch.length },
-          'Batch embedding failed'
-        );
-        throw error;
-      }
+    try {
+      const allEmbeddings = await this.embeddings.embedDocuments(texts);
+      logger.info({ count: allEmbeddings.length }, 'Batch embeddings generated');
+      return allEmbeddings;
+    } catch (error) {
+      logger.error({ error, batchSize: texts.length }, 'Batch embedding failed');
+      throw error;
     }
-
-    logger.info({ count: allEmbeddings.length }, 'Batch embeddings generated');
-    return allEmbeddings;
   }
 }

@@ -7,23 +7,6 @@ const logger = pino({ name: 'DiffAnalyzerAgent' });
 
 const SYSTEM_PROMPT = `You are a senior code reviewer. Your job is to analyze a git diff and produce a structured JSON analysis.
 
-You MUST respond with valid JSON matching this exact schema:
-{
-  "filesChanged": [
-    {
-      "path": "string - file path",
-      "changeType": "added | modified | deleted | renamed",
-      "additions": "number - lines added",
-      "deletions": "number - lines removed",
-      "summary": "string - 1-2 sentence description of what changed in this file"
-    }
-  ],
-  "functionsModified": ["string - function/method names that were changed"],
-  "linesAdded": "number - total lines added",
-  "linesRemoved": "number - total lines removed",
-  "rawSummary": "string - 2-3 sentence high-level overview of the entire diff"
-}
-
 Be precise about file paths. For functionsModified, list function/method names that were added, modified, or deleted.
 If the diff is for non-code files (configs, docs, etc.), still describe the changes accurately.`;
 
@@ -70,19 +53,22 @@ export class DiffAnalyzerAgent extends BaseAgent {
     diff: string,
     commitMessage: string
   ): Promise<DiffAnalysis> {
-    const prompt = this.buildPrompt(USER_PROMPT_TEMPLATE, {
-      commitMessage,
-      diff,
-    });
-
-    const raw = await this.callLLM(SYSTEM_PROMPT, prompt, 2000);
-
     try {
-      const parsed = JSON.parse(raw);
-      const validated = DiffAnalysisOutputSchema.parse(parsed);
-      return validated;
+      const prompt = this.buildPrompt(USER_PROMPT_TEMPLATE, {
+        commitMessage,
+        diff,
+      });
+
+      const structuredModel = this.chatModel.withStructuredOutput(DiffAnalysisOutputSchema, { name: 'diff_analysis' });
+      
+      const response = await structuredModel.invoke([
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: prompt }
+      ]);
+      
+      return response as DiffAnalysis;
     } catch (error) {
-      logger.error({ error, raw: raw.slice(0, 200) }, 'Failed to parse LLM output');
+      logger.error({ error }, 'Failed to parse LLM structured output');
       // Return a minimal fallback analysis
       return {
         filesChanged: [],

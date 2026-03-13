@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client';
-import OpenAI from 'openai';
 import pino from 'pino';
 
 import { config } from './config/index.js';
@@ -20,6 +19,8 @@ import { ChatService } from './services/ChatService.js';
 import { createCommitQueue } from './queues/CommitQueue.js';
 import { createCommitWorker } from './workers/commitWorker.js';
 import { createServer } from './api/server.js';
+
+import { createChatModel, createEmbeddingModel } from './services/LLMProvider.js';
 
 const logger = pino({ name: 'GitScribe' });
 
@@ -49,34 +50,36 @@ async function main() {
   await diffStorage.initialize();
   logger.info('✅ MinIO initialized');
 
-  // OpenAI client
-  const openai = new OpenAI({ apiKey: config.openaiApiKey });
+  // LLM Models via Factory
+  const chatModel = createChatModel(config);
+  const embeddingModel = createEmbeddingModel(config);
+  logger.info('✅ LLM plugins initialized');
 
   // GitHub connector
   const githubConnector = new GitHubConnector(config.githubToken);
 
   // ─── Initialize Services ──────────────────────────────
 
-  const embeddingService = new EmbeddingService(openai, config.llmEmbeddingModel);
+  const embeddingService = new EmbeddingService(embeddingModel);
   const repoManager = new RepoManager(prisma);
   const summaryStore = new SummaryStore(prisma, embeddingService);
-  const chatService = new ChatService(openai, config.llmModel, summaryStore);
+  const chatService = new ChatService(chatModel, summaryStore);
 
   // ─── Initialize Agent Pipeline ────────────────────────
 
-  const diffAnalyzer = new DiffAnalyzerAgent(openai, config.llmModel);
-  const summaryAgent = new SummaryAgent(openai, config.llmModel);
+  const diffAnalyzer = new DiffAnalyzerAgent(chatModel);
+  const summaryAgent = new SummaryAgent(chatModel);
   const pipeline = new CommitPipeline(diffAnalyzer, summaryAgent);
 
   logger.info('✅ Agent pipeline initialized');
 
   // ─── Initialize Queue & Worker ────────────────────────
 
-  const redisConnection = redisCache.getConnection();
-  const commitQueue = createCommitQueue(redisConnection);
+  const queueConnectionOpts = { host: '127.0.0.1', port: 6379 };
+  const commitQueue = createCommitQueue(queueConnectionOpts);
 
   const commitWorker = createCommitWorker({
-    connection: redisConnection,
+    connection: queueConnectionOpts,
     concurrency: config.maxConcurrentWorkers,
     pipeline,
     githubConnector,

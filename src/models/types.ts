@@ -97,5 +97,7 @@ export interface PipelineState {
   diffAnalysis: DiffAnalysis | null;
   summaryDraft: SummaryDraft | null;
   qualityScore: number | null;
+  extractedConcepts: string[];
+  retryCount: number;
   error: string | null;
 }

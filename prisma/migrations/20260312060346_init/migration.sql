@@ -63,6 +63,7 @@ CREATE TABLE "summaries" (
     "status" "SummaryStatus" NOT NULL DEFAULT 'pending',
     "errorMessage" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "embedding" vector,
 
     CONSTRAINT "summaries_pkey" PRIMARY KEY ("id")
 );

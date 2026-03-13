@@ -1,4 +1,5 @@
-import OpenAI from 'openai';
+import { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import pino from 'pino';
 import type { SummaryStore } from './SummaryStore.js';
 import type { ChatResponse, CitedCommit } from '../models/types.js';
@@ -25,13 +26,11 @@ Please answer the question based on these commit summaries. Cite commit SHAs whe
  * with semantic search retrieval and LLM-generated cited answers.
  */
 export class ChatService {
-  private openai: OpenAI;
-  private model: string;
+  private chatModel: BaseChatModel;
   private summaryStore: SummaryStore;
 
-  constructor(openai: OpenAI, model: string, summaryStore: SummaryStore) {
-    this.openai = openai;
-    this.model = model;
+  constructor(chatModel: BaseChatModel, summaryStore: SummaryStore) {
+    this.chatModel = chatModel;
     this.summaryStore = summaryStore;
   }
 
@@ -71,17 +70,14 @@ Risk: ${s.riskLevel}`
       .replace('{{context}}', context);
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        max_tokens: 2000,
-        temperature: 0.2,
-      });
+      const response = await this.chatModel.invoke([
+        new SystemMessage(SYSTEM_PROMPT),
+        new HumanMessage(userPrompt),
+      ]);
 
-      const answer = response.choices[0]?.message?.content ?? 'Unable to generate answer.';
+      const answer = typeof response.content === 'string' 
+        ? response.content 
+        : 'Unable to generate answer.';
 
       // Build citations from the relevant summaries
       const citations: CitedCommit[] = relevant.map((s) => ({

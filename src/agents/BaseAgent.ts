@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import pino from 'pino';
 
 const logger = pino({ name: 'BaseAgent' });
@@ -8,12 +8,10 @@ const logger = pino({ name: 'BaseAgent' });
  * Provides shared utilities: prompt building, LLM calling, and text chunking.
  */
 export abstract class BaseAgent {
-  protected openai: OpenAI;
-  protected model: string;
+  protected chatModel: BaseChatModel;
 
-  constructor(openai: OpenAI, model: string) {
-    this.openai = openai;
-    this.model = model;
+  constructor(chatModel: BaseChatModel) {
+    this.chatModel = chatModel;
   }
 
   /**
@@ -28,42 +26,32 @@ export abstract class BaseAgent {
   }
 
   /**
-   * Call the LLM and return the text response.
+   * Helper that subclasses can override/use if they want raw string calling.
+   * However, most agents will use `this.chatModel.withStructuredOutput()` directly now.
    */
-  protected async callLLM(
+  protected async callLLMRaw(
     systemPrompt: string,
-    userPrompt: string,
-    maxTokens: number = 2000
+    userPrompt: string
   ): Promise<string> {
     const startMs = Date.now();
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        max_tokens: maxTokens,
-        temperature: 0.3,
-        response_format: { type: 'json_object' },
-      });
+      const response = await this.chatModel.invoke([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ]);
 
-      const content = response.choices[0]?.message?.content ?? '';
+      const content = typeof response.content === 'string' ? response.content : '';
       const elapsed = Date.now() - startMs;
 
       logger.debug(
-        {
-          model: this.model,
-          tokens: response.usage?.total_tokens,
-          elapsed,
-        },
+        { elapsed },
         'LLM call completed'
       );
 
       return content;
     } catch (error) {
-      logger.error({ error, model: this.model }, 'LLM call failed');
+      logger.error({ error }, 'LLM call failed');
       throw error;
     }
   }

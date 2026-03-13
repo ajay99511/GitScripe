@@ -7,21 +7,6 @@ const logger = pino({ name: 'SummaryAgent' });
 
 const SYSTEM_PROMPT = `You are an expert engineering writer. Your job is to produce a comprehensive commit summary from a structured diff analysis.
 
-You MUST respond with valid JSON matching this exact schema:
-{
-  "shortSummary": "string - 2-3 sentence headline of what this commit does",
-  "detailedSummary": "string - full narrative paragraph explaining the change in depth",
-  "inferredIntent": "string - WHY this change was made, inferred from the code changes and commit message",
-  "fileSummaries": {
-    "path/to/file.ts": "string - what changed in this specific file"
-  },
-  "moduleSummaries": {
-    "src/auth/": "string - summary of changes in this directory/module"
-  },
-  "tags": ["string - architectural/functional tags like 'auth', 'refactor', 'bugfix', 'payments', 'api'"],
-  "riskLevel": "low | medium | high"
-}
-
 Guidelines:
 - shortSummary: Be specific, not generic. "Added OAuth2 callback handler and token refresh logic" is good. "Made changes" is bad.
 - detailedSummary: Explain the change as if writing to a teammate who will review it later.
@@ -76,14 +61,17 @@ export class SummaryAgent extends BaseAgent {
       fileDetails: fileDetails || 'No file details available',
     });
 
-    const raw = await this.callLLM(SYSTEM_PROMPT, prompt, 3000);
-
     try {
-      const parsed = JSON.parse(raw);
-      const validated = SummaryDraftOutputSchema.parse(parsed);
-      return validated;
+      const structuredModel = this.chatModel.withStructuredOutput(SummaryDraftOutputSchema, { name: 'commit_summary' });
+      
+      const response = await structuredModel.invoke([
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: prompt }
+      ]);
+      
+      return response as SummaryDraft;
     } catch (error) {
-      logger.error({ error, raw: raw.slice(0, 200) }, 'Failed to parse summary output');
+      logger.error({ error }, 'Failed to parse summary output');
       // Return a minimal fallback
       return {
         shortSummary: commit.message.split('\n')[0] ?? 'No summary available',

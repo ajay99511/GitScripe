@@ -93,8 +93,9 @@ model Summary {
   errorMessage    String?       @db.Text
   createdAt       DateTime      @default(now())
 
-  // NOTE: embedding VECTOR(1536) column is added via raw SQL migration
-  // Prisma does not natively support pgvector types yet
+  embedding       Unsupported("vector")?
+
+  // NOTE: added via raw SQL originally, now tracked by Prisma via Unsupported
 
   commit     Commit     @relation(fields: [commitSha], references: [sha], onDelete: Cascade)
   repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)

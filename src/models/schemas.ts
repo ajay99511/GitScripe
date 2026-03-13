@@ -53,6 +53,12 @@ export const SummaryDraftOutputSchema = z.object({
   riskLevel: z.enum(['low', 'medium', 'high']),
 });
 
+export const CriticOutputSchema = z.object({
+  qualityScore: z.number().min(0).max(1),
+  feedback: z.string(),
+  extractedConcepts: z.array(z.string()),
+});
+
 // ─── Type exports from schemas ───────────────────────────
 
 export type RegisterRepoInput = z.infer<typeof RegisterRepoSchema>;
@@ -60,3 +66,4 @@ export type ChatQueryInput = z.infer<typeof ChatQuerySchema>;
 export type PaginationInput = z.infer<typeof PaginationSchema>;
 export type DiffAnalysisOutput = z.infer<typeof DiffAnalysisOutputSchema>;
 export type SummaryDraftOutput = z.infer<typeof SummaryDraftOutputSchema>;
+export type CriticOutput = z.infer<typeof CriticOutputSchema>;
