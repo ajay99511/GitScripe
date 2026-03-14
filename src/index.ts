@@ -90,6 +90,8 @@ async function main() {
   const commitWorker = createCommitWorker({
     connection: queueConnectionOpts,
     concurrency: config.maxConcurrentWorkers,
+    llmMaxJobsPerWindow: config.llmMaxJobsPerWindow,
+    llmRateLimitWindowMs: config.llmRateLimitWindowMs,
     pipeline,
     githubConnector,
     diffStorage,

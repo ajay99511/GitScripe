@@ -42,6 +42,11 @@ const ConfigSchema = z.object({
   nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
   maxConcurrentWorkers: z.coerce.number().int().min(1).max(10).default(3),
   webhookSecret: z.string().optional(),
+
+  // LLM Rate Limiting — tune these to match your provider tier
+  // Default: conservative Tier 1 values safe for OpenAI/Anthropic free/low tiers
+  llmMaxJobsPerWindow: z.coerce.number().int().min(1).default(10),
+  llmRateLimitWindowMs: z.coerce.number().int().min(1000).default(60000),
 });
 
 function loadConfig() {
@@ -68,6 +73,8 @@ function loadConfig() {
     nodeEnv: process.env.NODE_ENV,
     maxConcurrentWorkers: process.env.MAX_CONCURRENT_WORKERS,
     webhookSecret: process.env.WEBHOOK_SECRET,
+    llmMaxJobsPerWindow: process.env.LLM_MAX_JOBS_PER_WINDOW,
+    llmRateLimitWindowMs: process.env.LLM_RATE_LIMIT_WINDOW_MS,
   });
 
   if (!result.success) {

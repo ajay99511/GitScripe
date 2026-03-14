@@ -2,6 +2,7 @@ import pino from 'pino';
 import { BaseAgent } from './BaseAgent.js';
 import { DiffAnalysisOutputSchema } from '../models/schemas.js';
 import type { DiffAnalysis } from '../models/types.js';
+import { preprocessDiff } from '../utils/diffPreprocessor.js';
 
 const logger = pino({ name: 'DiffAnalyzerAgent' });
 
@@ -29,22 +30,48 @@ export class DiffAnalyzerAgent extends BaseAgent {
    * For large diffs, chunks the text and merges results.
    */
   async analyze(diff: string, commitMessage: string): Promise<DiffAnalysis> {
-    const chunks = this.chunkText(diff);
-    logger.info({ chunks: chunks.length }, 'Analyzing diff');
+    // Preprocess: strip noise, skip lock files, collapse context lines
+    const { diff: cleanDiff, skippedFiles, originalBytes, processedBytes } = preprocessDiff(diff);
+
+    if (skippedFiles.length > 0) {
+      logger.debug({ skippedFiles, originalBytes, processedBytes }, 'Preprocessed diff — skipped noise files');
+    }
+
+    // If preprocessing removed everything meaningful, return a minimal analysis
+    if (!cleanDiff.trim()) {
+      logger.info({ skippedFiles }, 'Diff contained only noise files — skipping LLM analysis');
+      return {
+        filesChanged: skippedFiles.map((path) => ({
+          path,
+          changeType: 'modified' as const,
+          additions: 0,
+          deletions: 0,
+          summary: 'Dependency/lock file update (skipped)',
+        })),
+        functionsModified: [],
+        linesAdded: 0,
+        linesRemoved: 0,
+        rawSummary: `Dependency or generated file update: ${skippedFiles.join(', ')}`,
+      };
+    }
+
+    const chunks = this.chunkText(cleanDiff);
+    logger.info({ chunks: chunks.length, originalBytes, processedBytes }, 'Analyzing diff');
 
     if (chunks.length === 1) {
       return this.analyzeSingle(chunks[0], commitMessage);
     }
 
-    // For multi-chunk diffs, analyze each chunk and merge
-    const results = await Promise.all(
-      chunks.map((chunk, i) =>
-        this.analyzeSingle(
-          chunk,
-          `${commitMessage} (part ${i + 1} of ${chunks.length})`
-        )
-      )
-    );
+    // Process chunks sequentially to avoid firing N parallel LLM calls for large diffs.
+    // The merge cost is negligible; the token/RPM savings are significant.
+    const results: DiffAnalysis[] = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const result = await this.analyzeSingle(
+        chunks[i]!,
+        `${commitMessage} (part ${i + 1} of ${chunks.length})`
+      );
+      results.push(result);
+    }
 
     return this.mergeAnalyses(results);
   }
