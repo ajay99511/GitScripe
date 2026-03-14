@@ -124,9 +124,17 @@ export function createCommitWorker(deps: CommitWorkerDeps): Worker<CommitJobData
         }
 
         // Step 5: Upsert the summary
-        await summaryStore.upsert(sha, repoId, result.summaryDraft, llmModel, processingMs);
+        await summaryStore.upsert(
+          sha, 
+          repoId, 
+          result.summaryDraft, 
+          llmModel, 
+          processingMs, 
+          result.qualityScore ?? 1.0, 
+          result.extractedConcepts ?? []
+        );
 
-        logger.info({ sha, processingMs, qualityScore: result.qualityScore }, 'Commit processed');
+        logger.info({ sha, processingMs, qualityScore: result.qualityScore, concepts: result.extractedConcepts?.length }, 'Commit processed');
 
         return {
           sha,

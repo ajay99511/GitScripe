@@ -27,7 +27,9 @@ export class SummaryStore {
     repoId: string,
     draft: SummaryDraft,
     llmModel: string,
-    processingMs: number
+    processingMs: number,
+    qualityScore: number,
+    extractedConcepts: string[]
   ): Promise<void> {
     // Build text for embedding: combine short + detailed summary + intent
     const embeddingText = [
@@ -35,6 +37,7 @@ export class SummaryStore {
       draft.detailedSummary,
       draft.inferredIntent,
       `Tags: ${draft.tags.join(', ')}`,
+      `Concepts: ${extractedConcepts.join(', ')}`,
     ].join('\n\n');
 
     let embedding: number[];
@@ -45,37 +48,53 @@ export class SummaryStore {
       embedding = [];
     }
 
-    // Upsert the summary record
-    await this.prisma.summary.upsert({
-      where: { commitSha },
-      create: {
-        commitSha,
-        repoId,
-        shortSummary: draft.shortSummary,
-        detailedSummary: draft.detailedSummary,
-        inferredIntent: draft.inferredIntent,
-        fileSummaries: draft.fileSummaries as Prisma.InputJsonValue,
-        moduleSummaries: draft.moduleSummaries as Prisma.InputJsonValue,
-        tags: draft.tags as Prisma.InputJsonValue,
-        riskLevel: draft.riskLevel,
-        qualityScore: 1.0,
-        llmModel,
-        processingMs,
-        status: 'done',
-      },
-      update: {
-        shortSummary: draft.shortSummary,
-        detailedSummary: draft.detailedSummary,
-        inferredIntent: draft.inferredIntent,
-        fileSummaries: draft.fileSummaries as Prisma.InputJsonValue,
-        moduleSummaries: draft.moduleSummaries as Prisma.InputJsonValue,
-        tags: draft.tags as Prisma.InputJsonValue,
-        riskLevel: draft.riskLevel,
-        qualityScore: 1.0,
-        llmModel,
-        processingMs,
-        status: 'done',
-      },
+    // Upsert the summary record and concept links inside a transaction
+    await this.prisma.$transaction(async (tx) => {
+      await tx.summary.upsert({
+        where: { commitSha },
+        create: {
+          commitSha,
+          repoId,
+          shortSummary: draft.shortSummary,
+          detailedSummary: draft.detailedSummary,
+          inferredIntent: draft.inferredIntent,
+          fileSummaries: draft.fileSummaries as Prisma.InputJsonValue,
+          moduleSummaries: draft.moduleSummaries as Prisma.InputJsonValue,
+          tags: draft.tags as Prisma.InputJsonValue,
+          riskLevel: draft.riskLevel,
+          qualityScore,
+          llmModel,
+          processingMs,
+          status: 'done',
+        },
+        update: {
+          shortSummary: draft.shortSummary,
+          detailedSummary: draft.detailedSummary,
+          inferredIntent: draft.inferredIntent,
+          fileSummaries: draft.fileSummaries as Prisma.InputJsonValue,
+          moduleSummaries: draft.moduleSummaries as Prisma.InputJsonValue,
+          tags: draft.tags as Prisma.InputJsonValue,
+          riskLevel: draft.riskLevel,
+          qualityScore,
+          llmModel,
+          processingMs,
+          status: 'done',
+        },
+      });
+
+      // Erase any existing concepts for this commit and insert the new ones
+      await tx.conceptLink.deleteMany({ where: { commitSha } });
+      
+      if (extractedConcepts.length > 0) {
+        await tx.conceptLink.createMany({
+          data: extractedConcepts.map((concept) => ({
+            concept,
+            commitSha,
+            repoId,
+            confidence: qualityScore,
+          })),
+        });
+      }
     });
 
     // Store embedding via raw SQL (Prisma doesn't support vector type)

@@ -9,6 +9,7 @@ import { RedisCache } from './connectors/RedisCache.js';
 
 import { DiffAnalyzerAgent } from './agents/DiffAnalyzerAgent.js';
 import { SummaryAgent } from './agents/SummaryAgent.js';
+import { CriticAgent } from './agents/CriticAgent.js';
 import { CommitPipeline } from './orchestration/CommitPipeline.js';
 
 import { RepoManager } from './services/RepoManager.js';
@@ -69,7 +70,8 @@ async function main() {
 
   const diffAnalyzer = new DiffAnalyzerAgent(chatModel);
   const summaryAgent = new SummaryAgent(chatModel);
-  const pipeline = new CommitPipeline(diffAnalyzer, summaryAgent);
+  const criticAgent = new CriticAgent(chatModel);
+  const pipeline = new CommitPipeline(diffAnalyzer, summaryAgent, criticAgent);
 
   logger.info('✅ Agent pipeline initialized');
 

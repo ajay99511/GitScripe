@@ -2,17 +2,39 @@ import { PrismaClient } from '@prisma/client';
 
 async function main() {
   const prisma = new PrismaClient();
-  const repoId = 'f2f7d36e-b66f-4f52-b0ed-421136b880be';
+  const githubUrl = 'https://github.com/octocat/Hello-World';
+  const owner = 'octocat';
+  const name = 'Hello-World';
   
-  await prisma.repository.update({
-    where: { id: repoId },
-    data: { lastSyncedSha: null }
-  });
+  // Find repo by unique githubUrl
+  let repo = await prisma.repository.findUnique({ where: { githubUrl } });
   
-  await prisma.summary.deleteMany({ where: { repoId } });
-  await prisma.commit.deleteMany({ where: { repoId } });
+  if (!repo) {
+    repo = await prisma.repository.create({
+      data: {
+        githubUrl,
+        owner,
+        name,
+        branch: 'master', // Hello-World still uses master
+        status: 'idle',
+      }
+    });
+    console.log(`Created repository ${name} with ID ${repo.id}`);
+  } else {
+    // Reset existing repo
+    await prisma.repository.update({
+      where: { id: repo.id },
+      data: { lastSyncedSha: null, status: 'idle' }
+    });
+    console.log(`Reset repository ${name} with ID ${repo.id}`);
+  }
   
-  console.log('Reset Hello-World repository');
+  // Delete all cascades
+  await prisma.summary.deleteMany({ where: { repoId: repo.id } });
+  await prisma.commit.deleteMany({ where: { repoId: repo.id } });
+  await prisma.conceptLink.deleteMany({ where: { repoId: repo.id } });
+  
+  console.log('Finished clearing cascades and concepts');
   await prisma.$disconnect();
 }
 

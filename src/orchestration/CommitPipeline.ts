@@ -3,6 +3,7 @@ import pino from 'pino';
 import type { CommitInfo, DiffAnalysis, SummaryDraft } from '../models/types.js';
 import type { DiffAnalyzerAgent } from '../agents/DiffAnalyzerAgent.js';
 import type { SummaryAgent } from '../agents/SummaryAgent.js';
+import type { CriticAgent } from '../agents/CriticAgent.js';
 
 const logger = pino({ name: 'CommitPipeline' });
 
@@ -23,6 +24,14 @@ const PipelineAnnotation = Annotation.Root({
     reducer: (_, next) => next,
     default: () => null,
   }),
+  extractedConcepts: Annotation<string[]>({
+    reducer: (_, next) => next,
+    default: () => [],
+  }),
+  retryCount: Annotation<number>({
+    reducer: (curr, next) => curr + next,
+    default: () => 0,
+  }),
   error: Annotation<string | null>({
     reducer: (_, next) => next,
     default: () => null,
@@ -39,12 +48,14 @@ type PipelineState = typeof PipelineAnnotation.State;
 export class CommitPipeline {
   private diffAnalyzer: DiffAnalyzerAgent;
   private summaryAgent: SummaryAgent;
+  private criticAgent: CriticAgent;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private graph: any = null;
 
-  constructor(diffAnalyzer: DiffAnalyzerAgent, summaryAgent: SummaryAgent) {
+  constructor(diffAnalyzer: DiffAnalyzerAgent, summaryAgent: SummaryAgent, criticAgent: CriticAgent) {
     this.diffAnalyzer = diffAnalyzer;
     this.summaryAgent = summaryAgent;
+    this.criticAgent = criticAgent;
   }
 
   /**
@@ -75,31 +86,57 @@ export class CommitPipeline {
           return { error: 'No diff analysis available for summary generation' };
         }
 
-        logger.info({ sha: state.commit.sha }, 'Running SummaryAgent');
+        logger.info({ sha: state.commit.sha, retry: state.retryCount }, 'Running SummaryAgent');
 
         try {
           const draft = await summaryAgent.summarize(
             state.commit,
             state.diffAnalysis
           );
-          return { summaryDraft: draft, qualityScore: 1.0 };
+          return { summaryDraft: draft, retryCount: 1 };
         } catch (error) {
           const msg = error instanceof Error ? error.message : 'Unknown error';
           logger.error({ error, sha: state.commit.sha }, 'Summary generation failed');
           return { error: `Summary failed: ${msg}` };
         }
       })
-      // Phase 2: Add CriticAgent node here with conditional edge
-      // .addNode('criticAgent', async (state) => { ... })
+      .addNode('evaluateSummary', async (state: PipelineState) => {
+        if (!state.summaryDraft) {
+          return { error: 'No summary draft available for evaluation' };
+        }
+
+        logger.info({ sha: state.commit.sha }, 'Running CriticAgent');
+
+        try {
+          const evaluation = await this.criticAgent.evaluate(
+            state.commit,
+            state.summaryDraft
+          );
+          return { 
+            qualityScore: evaluation.qualityScore,
+            extractedConcepts: evaluation.extractedConcepts 
+          };
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          logger.error({ error, sha: state.commit.sha }, 'Critic evaluation failed');
+          return { error: `Critic failed: ${msg}` };
+        }
+      })
       .addEdge(START, 'analyzeDiff')
       .addEdge('analyzeDiff', 'generateSummary')
-      .addEdge('generateSummary', END);
-
-    // Phase 2: Replace the direct edge with a conditional edge:
-    // .addConditionalEdges('generateSummary', (state) => {
-    //   if (state.qualityScore && state.qualityScore >= 0.8) return END;
-    //   return 'criticAgent';
-    // })
+      .addEdge('generateSummary', 'evaluateSummary')
+      .addConditionalEdges('evaluateSummary', (state: PipelineState) => {
+        if (state.error) return END; // bail on errors
+        
+        // If the score is good, or we've retried twice already, finish
+        if ((state.qualityScore && state.qualityScore >= 0.8) || state.retryCount >= 2) {
+          return END;
+        }
+        
+        // Otherwise, loop back to regenerate
+        logger.warn({ sha: state.commit.sha, score: state.qualityScore }, 'Summary quality low, retrying generation');
+        return 'generateSummary';
+      });
 
     return graph.compile();
   }
@@ -115,6 +152,7 @@ export class CommitPipeline {
     summaryDraft: SummaryDraft | null;
     diffAnalysis: DiffAnalysis | null;
     qualityScore: number | null;
+    extractedConcepts: string[];
     error: string | null;
   }> {
     if (!this.graph) {
@@ -129,6 +167,8 @@ export class CommitPipeline {
       diffAnalysis: null,
       summaryDraft: null,
       qualityScore: null,
+      extractedConcepts: [],
+      retryCount: 0,
       error: null,
     });
 
@@ -147,6 +187,7 @@ export class CommitPipeline {
       summaryDraft: result.summaryDraft,
       diffAnalysis: result.diffAnalysis,
       qualityScore: result.qualityScore,
+      extractedConcepts: result.extractedConcepts,
       error: result.error,
     };
   }

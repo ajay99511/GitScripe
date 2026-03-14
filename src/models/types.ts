@@ -70,6 +70,8 @@ export interface SummaryInfo {
   createdAt: Date;
 }
 
+export type { CriticOutput } from './schemas.js';
+
 export interface ChatResponse {
   answer: string;
   citations: CitedCommit[];
