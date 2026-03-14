@@ -22,6 +22,7 @@ import { createCommitWorker } from './workers/commitWorker.js';
 import { createServer } from './api/server.js';
 
 import { createChatModel, createEmbeddingModel } from './services/LLMProvider.js';
+import type { ConnectionOptions } from 'bullmq';
 
 const logger = pino({ name: 'GitScribe' });
 
@@ -64,6 +65,12 @@ async function main() {
   const embeddingService = new EmbeddingService(embeddingModel);
   const repoManager = new RepoManager(prisma);
   const summaryStore = new SummaryStore(prisma, embeddingService);
+
+  // Recover any repos stuck in 'syncing' from a previous crashed run
+  await repoManager.recoverStuckSyncs();
+
+  // Backfill any summaries missing embeddings from a previous partial write
+  await summaryStore.backfillMissingEmbeddings();
   const chatService = new ChatService(chatModel, summaryStore);
 
   // ─── Initialize Agent Pipeline ────────────────────────
@@ -77,7 +84,7 @@ async function main() {
 
   // ─── Initialize Queue & Worker ────────────────────────
 
-  const queueConnectionOpts = { host: '127.0.0.1', port: 6379 };
+  const queueConnectionOpts: ConnectionOptions = { host: '127.0.0.1', port: 6379 };
   const commitQueue = createCommitQueue(queueConnectionOpts);
 
   const commitWorker = createCommitWorker({

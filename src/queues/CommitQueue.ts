@@ -1,4 +1,5 @@
 import { Queue } from 'bullmq';
+import type { ConnectionOptions } from 'bullmq';
 import { z } from 'zod';
 
 // ─── Job Data Schema ─────────────────────────────────────
@@ -18,7 +19,7 @@ export type CommitJobData = z.infer<typeof CommitJobSchema>;
 const QUEUE_NAME = 'commit-processing';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createCommitQueue(connection: any): Queue<CommitJobData> {
+export function createCommitQueue(connection: ConnectionOptions): Queue<CommitJobData> {
   return new Queue<CommitJobData>(QUEUE_NAME, {
     connection,
     defaultJobOptions: {

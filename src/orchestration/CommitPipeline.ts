@@ -1,4 +1,4 @@
-import { Annotation, StateGraph, END, START } from '@langchain/langgraph';
+import { Annotation, StateGraph, END, START, type CompiledStateGraph } from '@langchain/langgraph';
 import pino from 'pino';
 import type { CommitInfo, DiffAnalysis, SummaryDraft } from '../models/types.js';
 import type { DiffAnalyzerAgent } from '../agents/DiffAnalyzerAgent.js';
@@ -42,15 +42,14 @@ type PipelineState = typeof PipelineAnnotation.State;
 
 /**
  * LangGraph-based commit processing pipeline.
- * Flow: analyzeDiff → generateSummary → END
- * Phase 2 will add: → criticAgent → (conditional loop back to generateSummary)
+ * Flow: analyzeDiff → generateSummary → evaluateSummary → (retry once if score < 0.8)
  */
 export class CommitPipeline {
   private diffAnalyzer: DiffAnalyzerAgent;
   private summaryAgent: SummaryAgent;
   private criticAgent: CriticAgent;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private graph: any = null;
+  private graph: CompiledStateGraph<any, any, any> | null = null;
 
   constructor(diffAnalyzer: DiffAnalyzerAgent, summaryAgent: SummaryAgent, criticAgent: CriticAgent) {
     this.diffAnalyzer = diffAnalyzer;
@@ -128,8 +127,8 @@ export class CommitPipeline {
       .addConditionalEdges('evaluateSummary', (state: PipelineState) => {
         if (state.error) return END; // bail on errors
         
-        // If the score is good, or we've retried twice already, finish
-        if ((state.qualityScore && state.qualityScore >= 0.8) || state.retryCount >= 2) {
+        // If the score is good, or we've already retried once, finish
+        if ((state.qualityScore && state.qualityScore >= 0.8) || state.retryCount >= 1) {
           return END;
         }
         
@@ -170,7 +169,7 @@ export class CommitPipeline {
       extractedConcepts: [],
       retryCount: 0,
       error: null,
-    });
+    }) as PipelineState;
 
     const elapsed = Date.now() - startMs;
     logger.info(

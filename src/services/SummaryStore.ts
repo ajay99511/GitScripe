@@ -97,14 +97,25 @@ export class SummaryStore {
       }
     });
 
-    // Store embedding via raw SQL (Prisma doesn't support vector type)
+    // Store embedding via raw SQL (Prisma doesn't support vector type natively)
+    // NOTE: This is intentionally outside the transaction — vector writes can't be
+    // wrapped in Prisma interactive transactions. If this fails, the summary is still
+    // persisted with status='done' but embedding=NULL. Use backfillMissingEmbeddings()
+    // to detect and repair these cases.
     if (embedding.length > 0) {
       const vectorStr = `[${embedding.join(',')}]`;
-      await this.prisma.$executeRawUnsafe(
-        `UPDATE "summaries" SET "embedding" = $1::vector WHERE "commitSha" = $2`,
-        vectorStr,
-        commitSha
-      );
+      try {
+        await this.prisma.$executeRawUnsafe(
+          `UPDATE "summaries" SET "embedding" = $1::vector WHERE "commitSha" = $2`,
+          vectorStr,
+          commitSha
+        );
+      } catch (error) {
+        logger.error(
+          { error, commitSha },
+          'Embedding write failed — summary saved but will be missing from semantic search. Run backfillMissingEmbeddings() to repair.'
+        );
+      }
     }
 
     logger.info({ commitSha, hasEmbedding: embedding.length > 0 }, 'Summary upserted');
@@ -238,8 +249,44 @@ export class SummaryStore {
     };
   }
 
-  // ─── Private Helpers ─────────────────────────────────
+  /**
+   * Find all done summaries missing an embedding and re-generate them.
+   * Call this on startup or as a maintenance task to repair partial writes.
+   */
+  async backfillMissingEmbeddings(): Promise<number> {
+    const rows = await this.prisma.$queryRaw<{ commitSha: string; shortSummary: string; detailedSummary: string; inferredIntent: string; tags: unknown }[]>`
+      SELECT "commitSha", "shortSummary", "detailedSummary", "inferredIntent", "tags"
+      FROM "summaries"
+      WHERE "status" = 'done' AND "embedding" IS NULL
+    `;
 
+    if (rows.length === 0) return 0;
+
+    logger.info({ count: rows.length }, 'Backfilling missing embeddings');
+
+    let repaired = 0;
+    for (const row of rows) {
+      try {
+        const tags = Array.isArray(row.tags) ? (row.tags as string[]).join(', ') : '';
+        const text = [row.shortSummary, row.detailedSummary, row.inferredIntent, `Tags: ${tags}`].join('\n\n');
+        const embedding = await this.embeddingService.embed(text);
+        const vectorStr = `[${embedding.join(',')}]`;
+        await this.prisma.$executeRawUnsafe(
+          `UPDATE "summaries" SET "embedding" = $1::vector WHERE "commitSha" = $2`,
+          vectorStr,
+          row.commitSha
+        );
+        repaired++;
+      } catch (error) {
+        logger.warn({ error, commitSha: row.commitSha }, 'Backfill failed for summary');
+      }
+    }
+
+    logger.info({ repaired }, 'Embedding backfill complete');
+    return repaired;
+  }
+
+  // ─── Private Helpers ─────────────────────────────────
   private toSummaryInfo(s: {
     id: string;
     commitSha: string;

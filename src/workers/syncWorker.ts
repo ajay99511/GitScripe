@@ -54,8 +54,9 @@ export async function runSync(repoId: string, deps: SyncWorkerDeps): Promise<num
     for (const commit of commits) {
       commit.repoId = repoId;
 
-      // Fetch file list for this commit
+      // Fetch file list for this commit — small delay to avoid GitHub burst rate limiting
       try {
+        await new Promise((resolve) => setTimeout(resolve, 200));
         const files = await githubConnector.getCommitFiles(repo.owner, repo.name, commit.sha);
         commit.filesChanged = files.map((f) => f.filename);
         commit.additions = files.reduce((sum, f) => sum + f.additions, 0);

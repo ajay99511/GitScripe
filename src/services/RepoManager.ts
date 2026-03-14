@@ -109,6 +109,23 @@ export class RepoManager {
   }
 
   /**
+   * Reset any repos stuck in 'syncing' to 'error' on startup.
+   * Handles the case where the server crashed mid-sync.
+   */
+  async recoverStuckSyncs(): Promise<number> {
+    const result = await this.prisma.repository.updateMany({
+      where: { status: 'syncing' },
+      data: { status: 'error' },
+    });
+
+    if (result.count > 0) {
+      logger.warn({ count: result.count }, 'Recovered repos stuck in syncing state');
+    }
+
+    return result.count;
+  }
+
+  /**
    * Get sync progress by counting commit summary statuses.
    */
   async getSyncProgress(repoId: string): Promise<SyncProgress> {

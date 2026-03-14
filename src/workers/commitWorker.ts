@@ -1,4 +1,5 @@
 import { Worker, Job } from 'bullmq';
+import type { ConnectionOptions } from 'bullmq';
 import pino from 'pino';
 import type { CommitJobData } from '../queues/CommitQueue.js';
 import { QUEUE_NAME } from '../queues/CommitQueue.js';
@@ -13,8 +14,7 @@ import type { CommitInfo } from '../models/types.js';
 const logger = pino({ name: 'CommitWorker' });
 
 interface CommitWorkerDeps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  connection: any;
+  connection: ConnectionOptions;
   concurrency: number;
   pipeline: CommitPipeline;
   githubConnector: GitHubConnector;

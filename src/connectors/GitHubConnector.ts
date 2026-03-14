@@ -14,6 +14,7 @@ export class GitHubConnector {
   /**
    * Paginate all commits for a repo/branch, optionally since a given SHA.
    * Returns commits in chronological order (oldest first).
+   * Checks rate limit before starting to avoid mid-sync failures.
    */
   async getCommits(
     owner: string,
@@ -21,6 +22,17 @@ export class GitHubConnector {
     branch: string,
     sinceSha?: string
   ): Promise<CommitInfo[]> {
+    // Guard: check rate limit before paginating — a large sync can exhaust it mid-way
+    const { remaining, reset } = await this.getRateLimit();
+    if (remaining < 100) {
+      const waitMs = reset.getTime() - Date.now();
+      const waitMins = Math.ceil(waitMs / 60000);
+      throw new Error(
+        `GitHub rate limit too low to start sync: ${remaining} requests remaining. Resets in ~${waitMins} minute(s) at ${reset.toISOString()}.`
+      );
+    }
+
+    logger.debug({ remaining, owner, repo }, 'Rate limit check passed');
     const commits: CommitInfo[] = [];
     let foundSince = !sinceSha; // if no sinceSha, include everything
 

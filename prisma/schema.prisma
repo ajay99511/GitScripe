@@ -48,6 +48,7 @@ model Repository {
 
   commits   Commit[]
   summaries Summary[]
+  conceptLinks ConceptLink[]
 
   @@index([owner, name])
   @@map("repositories")
@@ -68,6 +69,7 @@ model Commit {
 
   repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
   summary    Summary?
+  conceptLinks ConceptLink[]
 
   @@index([repoId])
   @@index([committedAt])
@@ -113,6 +115,9 @@ model ConceptLink {
   repoId     String @db.Uuid
   confidence Float  @default(1.0)
   createdAt  DateTime @default(now())
+
+  commit     Commit     @relation(fields: [commitSha], references: [sha], onDelete: Cascade)
+  repository Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
 
   @@index([concept])
   @@index([repoId])
