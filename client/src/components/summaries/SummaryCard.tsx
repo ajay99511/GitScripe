@@ -53,6 +53,13 @@ export function SummaryCard({ summary }: SummaryCardProps) {
           <span className="text-[#8b949e] text-xs">{summary.authorName}</span>
           <span className="text-[#30363d] text-xs">·</span>
           <span className="text-[#8b949e] text-xs">{date}</span>
+          {(summary.additions > 0 || summary.deletions > 0) && (
+            <>
+              <span className="text-[#30363d] text-xs">·</span>
+              <span className="text-xs text-[#3fb950]">+{summary.additions}</span>
+              <span className="text-xs text-[#f85149]">-{summary.deletions}</span>
+            </>
+          )}
           <RiskBadge level={summary.riskLevel} />
           {summary.qualityScore != null && (
             <span className="text-xs text-[#8b949e]">
@@ -106,8 +113,8 @@ export function SummaryCard({ summary }: SummaryCardProps) {
             <p className="text-sm text-[#e6edf3]">{summary.inferredIntent}</p>
           </div>
 
-          {/* Per-file summaries */}
-          {Object.keys(summary.fileSummaries).length > 0 && (
+          {/* Per-file summaries — prefer fileSummaries (AI descriptions), fall back to raw filesChanged */}
+          {Object.keys(summary.fileSummaries).length > 0 ? (
             <div>
               <p className="text-xs text-[#8b949e] uppercase tracking-wider mb-1">Files Changed</p>
               <ul className="space-y-1">
@@ -119,7 +126,26 @@ export function SummaryCard({ summary }: SummaryCardProps) {
                 ))}
               </ul>
             </div>
-          )}
+          ) : summary.filesChanged.length > 0 ? (
+            <div>
+              <p className="text-xs text-[#8b949e] uppercase tracking-wider mb-1">
+                Files Changed
+                {(summary.additions > 0 || summary.deletions > 0) && (
+                  <span className="ml-2 normal-case font-normal">
+                    <span className="text-[#3fb950]">+{summary.additions}</span>
+                    <span className="text-[#f85149] ml-1">-{summary.deletions}</span>
+                  </span>
+                )}
+              </p>
+              <ul className="space-y-0.5">
+                {summary.filesChanged.map((file) => (
+                  <li key={file}>
+                    <code className="text-xs text-[#8b949e] font-mono">{file}</code>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           {/* Concepts */}
           {summary.extractedConcepts.length > 0 && (

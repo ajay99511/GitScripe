@@ -73,13 +73,16 @@ export interface SummaryInfo {
   committedAt: Date;
   htmlUrl: string;
   extractedConcepts: string[];
+  filesChanged: string[];
+  additions: number;
+  deletions: number;
 }
 
 export type { CriticOutput } from './schemas.js';
 
 export interface ChatResponse {
   answer: string;
-  citations: CitedCommit[];
+  citedCommits: CitedCommit[];
 }
 
 export interface CitedCommit {

@@ -43,6 +43,9 @@ export interface SummaryInfo {
   extractedConcepts: string[];
   htmlUrl: string;
   status: 'pending' | 'processing' | 'done' | 'failed';
+  filesChanged: string[];
+  additions: number;
+  deletions: number;
 }
 
 export interface CitedCommit {

@@ -169,9 +169,14 @@ export class SummaryStore {
     let sql: string;
     let params: unknown[];
 
+    // Explicitly select all columns except "embedding" (Prisma can't deserialize vector type)
+    const cols = `"id", "commitSha", "repoId", "shortSummary", "detailedSummary", "inferredIntent",
+      "fileSummaries", "moduleSummaries", "tags", "riskLevel", "qualityScore", "llmModel",
+      "processingMs", "status", "errorMessage", "createdAt"`;
+
     if (repoId) {
       sql = `
-        SELECT *, 1 - (embedding <=> $1::vector) as similarity
+        SELECT ${cols}, 1 - (embedding <=> $1::vector) as similarity
         FROM "summaries"
         WHERE "repoId" = $2::uuid
           AND "status" = 'done'
@@ -182,7 +187,7 @@ export class SummaryStore {
       params = [vectorStr, repoId, limit];
     } else {
       sql = `
-        SELECT *, 1 - (embedding <=> $1::vector) as similarity
+        SELECT ${cols}, 1 - (embedding <=> $1::vector) as similarity
         FROM "summaries"
         WHERE "status" = 'done'
           AND "embedding" IS NOT NULL
@@ -210,8 +215,12 @@ export class SummaryStore {
     repoId: string
   ): Promise<SummaryInfo[]> {
     // Query commits where filesChanged JSONB array contains the file path
+    // Explicitly exclude "embedding" column — Prisma can't deserialize vector type
     const results = await this.prisma.$queryRaw<Record<string, unknown>[]>`
-      SELECT s.*
+      SELECT s."id", s."commitSha", s."repoId", s."shortSummary", s."detailedSummary",
+             s."inferredIntent", s."fileSummaries", s."moduleSummaries", s."tags",
+             s."riskLevel", s."qualityScore", s."llmModel", s."processingMs",
+             s."status", s."errorMessage", s."createdAt"
       FROM "summaries" s
       JOIN "commits" c ON s."commitSha" = c."sha"
       WHERE c."repoId" = ${repoId}::uuid
@@ -311,6 +320,9 @@ export class SummaryStore {
       authorName: string;
       committedAt: Date;
       repoId: string;
+      filesChanged: Prisma.JsonValue;
+      additions: number;
+      deletions: number;
     } | null;
   }): SummaryInfo {
     // htmlUrl is built correctly in the route handler (which has owner/name).
@@ -338,6 +350,9 @@ export class SummaryStore {
       committedAt: s.commit?.committedAt ?? s.createdAt,
       htmlUrl,
       extractedConcepts: [],
+      filesChanged: (s.commit?.filesChanged ?? []) as string[],
+      additions: s.commit?.additions ?? 0,
+      deletions: s.commit?.deletions ?? 0,
     };
   }
 
@@ -363,6 +378,9 @@ export class SummaryStore {
       committedAt: (r.committedAt as Date) ?? (r.createdAt as Date),
       htmlUrl: (r.htmlUrl as string) ?? '',
       extractedConcepts: [],
+      filesChanged: (r.filesChanged as string[]) ?? [],
+      additions: (r.additions as number) ?? 0,
+      deletions: (r.deletions as number) ?? 0,
     };
   }
 }

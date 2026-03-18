@@ -80,14 +80,14 @@ Risk: ${s.riskLevel}`
         : 'Unable to generate answer.';
 
       // Build citations from the relevant summaries
-      const citations: CitedCommit[] = relevant.map((s) => ({
+      const citedCommits: CitedCommit[] = relevant.map((s) => ({
         sha: s.commitSha,
         shortSummary: s.shortSummary,
         committedAt: s.createdAt,
         relevanceScore: s.similarity,
       }));
 
-      return { answer, citations };
+      return { answer, citedCommits };
     } catch (error) {
       logger.error({ error }, 'Chat answer generation failed');
       throw error;
