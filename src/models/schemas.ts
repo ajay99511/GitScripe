@@ -67,3 +67,31 @@ export type PaginationInput = z.infer<typeof PaginationSchema>;
 export type DiffAnalysisOutput = z.infer<typeof DiffAnalysisOutputSchema>;
 export type SummaryDraftOutput = z.infer<typeof SummaryDraftOutputSchema>;
 export type CriticOutput = z.infer<typeof CriticOutputSchema>;
+
+// ─── GitHub Repo Discovery Schemas ──────────────────────
+
+// Represents a single repo returned by GET /github/repos
+export const DiscoveredRepoSchema = z.object({
+  owner: z.string(),
+  name: z.string(),
+  fullName: z.string(),
+  defaultBranch: z.string(),
+  private: z.boolean(),
+  description: z.string().nullable(),
+  htmlUrl: z.string().url(),
+  isRegistered: z.boolean(),
+});
+
+// Request body for POST /github/repos/register
+export const RegisterDiscoveredRepoSchema = z.object({
+  fullName: z
+    .string()
+    .regex(
+      /^[\w.-]+\/[\w.-]+$/,
+      'fullName must be in owner/repo format (alphanumeric, hyphens, underscores, dots)'
+    ),
+  branch: z.string().min(1).optional(), // overrides defaultBranch when provided
+});
+
+export type DiscoveredRepo = z.infer<typeof DiscoveredRepoSchema>;
+export type RegisterDiscoveredRepoInput = z.infer<typeof RegisterDiscoveredRepoSchema>;

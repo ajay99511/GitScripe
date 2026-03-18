@@ -68,6 +68,11 @@ export interface SummaryInfo {
   errorMessage: string | null;
   embedding?: number[];
   createdAt: Date;
+  // Joined from commit record
+  authorName: string;
+  committedAt: Date;
+  htmlUrl: string;
+  extractedConcepts: string[];
 }
 
 export type { CriticOutput } from './schemas.js';

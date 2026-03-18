@@ -1,16 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import { PaginationSchema } from '../../models/schemas.js';
 import type { SummaryStore } from '../../services/SummaryStore.js';
+import type { PrismaClient } from '@prisma/client';
 
 interface SummaryRouteDeps {
   summaryStore: SummaryStore;
+  prisma: PrismaClient;
 }
 
 export async function summaryRoutes(
   fastify: FastifyInstance,
   deps: SummaryRouteDeps
 ): Promise<void> {
-  const { summaryStore } = deps;
+  const { summaryStore, prisma } = deps;
 
   // ─── GET /repos/:repoId/summaries — Paginated summaries ────
 
@@ -20,10 +22,20 @@ export async function summaryRoutes(
       const { repoId } = request.params;
       const { page, limit } = PaginationSchema.parse(request.query);
 
-      const result = await summaryStore.listByRepo(repoId, page, limit);
+      const [result, repo] = await Promise.all([
+        summaryStore.listByRepo(repoId, page, limit),
+        prisma.repository.findUnique({ where: { id: repoId } }),
+      ]);
+
+      const summaries = result.summaries.map((s) => ({
+        ...s,
+        htmlUrl: repo && s.status === 'done'
+          ? `https://github.com/${repo.owner}/${repo.name}/commit/${s.commitSha}`
+          : s.htmlUrl,
+      }));
 
       return reply.send({
-        summaries: result.summaries,
+        summaries,
         pagination: {
           page,
           limit,

@@ -225,6 +225,8 @@ export class SummaryStore {
 
   /**
    * List summaries for a repo, paginated.
+   * Returns done, pending, processing, and failed summaries so the UI can show progress.
+   * Joins commit data to include authorName, committedAt, and htmlUrl.
    */
   async listByRepo(
     repoId: string,
@@ -233,13 +235,14 @@ export class SummaryStore {
   ): Promise<{ summaries: SummaryInfo[]; total: number }> {
     const [summaries, total] = await Promise.all([
       this.prisma.summary.findMany({
-        where: { repoId, status: 'done' },
+        where: { repoId },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
+        include: { commit: true },
       }),
       this.prisma.summary.count({
-        where: { repoId, status: 'done' },
+        where: { repoId },
       }),
     ]);
 
@@ -304,7 +307,16 @@ export class SummaryStore {
     status: string;
     errorMessage: string | null;
     createdAt: Date;
+    commit?: {
+      authorName: string;
+      committedAt: Date;
+      repoId: string;
+    } | null;
   }): SummaryInfo {
+    // htmlUrl is built correctly in the route handler (which has owner/name).
+    // Here we leave it empty — the route will override it.
+    const htmlUrl = '';
+
     return {
       id: s.id,
       commitSha: s.commitSha,
@@ -322,6 +334,10 @@ export class SummaryStore {
       status: s.status as 'pending' | 'processing' | 'done' | 'failed',
       errorMessage: s.errorMessage,
       createdAt: s.createdAt,
+      authorName: s.commit?.authorName ?? 'Unknown',
+      committedAt: s.commit?.committedAt ?? s.createdAt,
+      htmlUrl,
+      extractedConcepts: [],
     };
   }
 
@@ -343,6 +359,10 @@ export class SummaryStore {
       status: (r.status as string) as 'pending' | 'processing' | 'done' | 'failed',
       errorMessage: r.errorMessage as string | null,
       createdAt: r.createdAt as Date,
+      authorName: (r.authorName as string) ?? 'Unknown',
+      committedAt: (r.committedAt as Date) ?? (r.createdAt as Date),
+      htmlUrl: (r.htmlUrl as string) ?? '',
+      extractedConcepts: [],
     };
   }
 }

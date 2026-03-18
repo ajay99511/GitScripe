@@ -1,5 +1,9 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
 import type { PrismaClient } from '@prisma/client';
 import type { Queue } from 'bullmq';
@@ -12,6 +16,7 @@ import { repoRoutes } from './routes/repos.js';
 import { commitRoutes } from './routes/commits.js';
 import { summaryRoutes } from './routes/summaries.js';
 import { chatRoutes } from './routes/chat.js';
+import { githubRoutes } from './routes/github.js';
 
 import type { RepoManager } from '../services/RepoManager.js';
 import type { SummaryStore } from '../services/SummaryStore.js';
@@ -98,9 +103,39 @@ export async function createServer(deps: ServerDeps) {
 
   await commitRoutes(fastify, { prisma });
 
-  await summaryRoutes(fastify, { summaryStore });
+  await summaryRoutes(fastify, { summaryStore, prisma });
 
   await chatRoutes(fastify, { chatService });
+
+  await githubRoutes(fastify, { githubConnector, repoManager, prisma });
+
+  // ─── Serve React SPA static assets ────────────────────
+
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const clientDist = path.resolve(__dirname, '../../client/dist');
+
+  if (fs.existsSync(clientDist)) {
+    await fastify.register(fastifyStatic, {
+      root: clientDist,
+      prefix: '/',
+      decorateReply: false,
+    });
+
+    fastify.setNotFoundHandler(async (request, reply) => {
+      if (
+        !request.url.startsWith('/repos') &&
+        !request.url.startsWith('/github') &&
+        !request.url.startsWith('/summaries') &&
+        !request.url.startsWith('/chat') &&
+        !request.url.startsWith('/health') &&
+        !request.url.startsWith('/admin') &&
+        !request.url.startsWith('/socket.io')
+      ) {
+        return reply.sendFile('index.html');
+      }
+      return reply.code(404).send({ error: 'Not found' });
+    });
+  }
 
   // ─── Socket.io for Real-Time Updates ───────────────────
 

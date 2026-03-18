@@ -4,6 +4,23 @@ import type { CommitInfo } from '../models/types.js';
 
 const logger = pino({ name: 'GitHubConnector' });
 
+export interface AccessibleRepo {
+  owner: string;
+  name: string;
+  fullName: string;       // "owner/name"
+  defaultBranch: string;
+  private: boolean;
+  description: string | null;
+  htmlUrl: string;
+}
+
+export interface RepoMetadata {
+  defaultBranch: string;
+  description: string | null;
+  private: boolean;
+  htmlUrl: string;
+}
+
 export class GitHubConnector {
   private octokit: Octokit;
 
@@ -108,6 +125,68 @@ export class GitHubConnector {
       remaining: data.rate.remaining,
       reset: new Date(data.rate.reset * 1000),
     };
+  }
+
+  /**
+   * List all repositories accessible to the authenticated token.
+   * Checks rate limit first — throws if fewer than 10 requests remain.
+   * Paginates through all results and returns a flat array.
+   */
+  async listAccessibleRepos(): Promise<AccessibleRepo[]> {
+    const { remaining, reset } = await this.getRateLimit();
+    if (remaining < 10) {
+      throw new Error(
+        `GitHub rate limit too low: ${remaining} remaining, resets at ${reset.toISOString()}`
+      );
+    }
+
+    const repos: AccessibleRepo[] = [];
+
+    const iterator = this.octokit.paginate.iterator(
+      this.octokit.rest.repos.listForAuthenticatedUser,
+      {
+        per_page: 100,
+        affiliation: 'owner,collaborator,organization_member',
+      }
+    );
+
+    for await (const response of iterator) {
+      for (const item of response.data) {
+        repos.push({
+          owner: item.owner?.login ?? '',
+          name: item.name,
+          fullName: item.full_name,
+          defaultBranch: item.default_branch,
+          private: item.private,
+          description: item.description ?? null,
+          htmlUrl: item.html_url,
+        });
+      }
+    }
+
+    return repos;
+  }
+
+  /**
+   * Fetch metadata for a single repository.
+   * Throws a descriptive error if the repo is not found (404).
+   */
+  async getRepoMetadata(owner: string, repo: string): Promise<RepoMetadata> {
+    try {
+      const { data } = await this.octokit.rest.repos.get({ owner, repo });
+      return {
+        defaultBranch: data.default_branch,
+        description: data.description ?? null,
+        private: data.private,
+        htmlUrl: data.html_url,
+      };
+    } catch (error: unknown) {
+      const status = (error as { status?: number }).status;
+      if (status === 404) {
+        throw new Error(`Repository ${owner}/${repo} not found or not accessible`);
+      }
+      throw error;
+    }
   }
 
   /**
