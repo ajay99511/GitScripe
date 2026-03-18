@@ -83,7 +83,7 @@ export const api = {
   repos: {
     list: () => apiFetch<{ repos: RepositoryInfo[] }>('/repos'),
     sync: (id: string) =>
-      apiFetch<{ message: string }>(`/repos/${id}/sync`, { method: 'POST' }),
+      apiFetch<{ message: string }>(`/repos/${id}/sync`, { method: 'POST', body: '{}' }),
     progress: (id: string) =>
       apiFetch<{ repo: RepositoryInfo; progress: SyncProgress }>(`/repos/${id}/progress`),
   },
