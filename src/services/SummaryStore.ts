@@ -144,6 +144,28 @@ export class SummaryStore {
   }
 
   /**
+   * Find summaries for commits within a date range (committedAt >= start AND committedAt < end).
+   */
+  async findByDateRange(start: Date, end: Date, repoId?: string): Promise<SummaryInfo[]> {
+    const results = await this.prisma.$queryRaw<Record<string, unknown>[]>`
+      SELECT s."id", s."commitSha", s."repoId", s."shortSummary", s."detailedSummary",
+             s."inferredIntent", s."fileSummaries", s."moduleSummaries", s."tags",
+             s."riskLevel", s."qualityScore", s."llmModel", s."processingMs",
+             s."status", s."errorMessage", s."createdAt",
+             c."authorName", c."committedAt", c."filesChanged", c."additions", c."deletions"
+      FROM "summaries" s
+      JOIN "commits" c ON s."commitSha" = c."sha"
+      WHERE c."committedAt" >= ${start}
+        AND c."committedAt" < ${end}
+        AND s."status" = 'done'
+        ${repoId ? Prisma.sql`AND c."repoId" = ${repoId}::uuid` : Prisma.empty}
+      ORDER BY c."committedAt" ASC
+    `;
+
+    return results.map((r) => this.rawToSummaryInfo(r));
+  }
+
+  /**
    * Find a summary by commit SHA.
    */
   async findBySha(sha: string): Promise<SummaryInfo | null> {
