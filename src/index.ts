@@ -82,10 +82,26 @@ async function main() {
 
   logger.info('✅ Agent pipeline initialized');
 
-  // ─── Initialize Queue & Worker ────────────────────────
+  // ─── Initialize Queue ─────────────────────────────────
 
   const queueConnectionOpts: ConnectionOptions = { host: '127.0.0.1', port: 6379 };
   const commitQueue = createCommitQueue(queueConnectionOpts);
+
+  // ─── Start API Server ─────────────────────────────────
+
+  const { start, io } = await createServer({
+    prisma,
+    repoManager,
+    summaryStore,
+    chatService,
+    githubConnector,
+    diffStorage,
+    commitQueue,
+    port: config.port,
+    config,
+  });
+
+  // ─── Initialize Worker ────────────────────────────────
 
   const commitWorker = createCommitWorker({
     connection: queueConnectionOpts,
@@ -99,25 +115,13 @@ async function main() {
     summaryStore,
     prisma,
     llmModel: config.llmModel,
+    io,
   });
 
   logger.info(
     { concurrency: config.maxConcurrentWorkers },
     '✅ BullMQ worker started'
   );
-
-  // ─── Start API Server ─────────────────────────────────
-
-  const { start } = await createServer({
-    prisma,
-    repoManager,
-    summaryStore,
-    chatService,
-    githubConnector,
-    diffStorage,
-    commitQueue,
-    port: config.port,
-  });
 
   await start();
 

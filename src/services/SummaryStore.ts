@@ -29,7 +29,8 @@ export class SummaryStore {
     llmModel: string,
     processingMs: number,
     qualityScore: number,
-    extractedConcepts: string[]
+    extractedConcepts: string[],
+    isTrivial: boolean = false
   ): Promise<void> {
     // Build text for embedding: combine short + detailed summary + intent
     const embeddingText = [
@@ -66,6 +67,7 @@ export class SummaryStore {
           llmModel,
           processingMs,
           status: 'done',
+          isTrivial,
         },
         update: {
           shortSummary: draft.shortSummary,
@@ -79,6 +81,7 @@ export class SummaryStore {
           llmModel,
           processingMs,
           status: 'done',
+          isTrivial,
         },
       });
 
@@ -119,6 +122,17 @@ export class SummaryStore {
     }
 
     logger.info({ commitSha, hasEmbedding: embedding.length > 0 }, 'Summary upserted');
+  }
+
+  /**
+   * Reset one or more summaries back to pending for re-summarization.
+   * Clears errorMessage so the UI shows a clean state.
+   */
+  async resetToPending(shas: string[]): Promise<void> {
+    await this.prisma.summary.updateMany({
+      where: { commitSha: { in: shas } },
+      data: { status: 'pending', errorMessage: null },
+    });
   }
 
   /**
@@ -337,6 +351,7 @@ export class SummaryStore {
     processingMs: number | null;
     status: string;
     errorMessage: string | null;
+    isTrivial?: boolean;
     createdAt: Date;
     commit?: {
       authorName: string;
@@ -367,6 +382,7 @@ export class SummaryStore {
       processingMs: s.processingMs,
       status: s.status as 'pending' | 'processing' | 'done' | 'failed',
       errorMessage: s.errorMessage,
+      isTrivial: s.isTrivial ?? false,
       createdAt: s.createdAt,
       authorName: s.commit?.authorName ?? 'Unknown',
       committedAt: s.commit?.committedAt ?? s.createdAt,
@@ -395,6 +411,7 @@ export class SummaryStore {
       processingMs: r.processingMs as number | null,
       status: (r.status as string) as 'pending' | 'processing' | 'done' | 'failed',
       errorMessage: r.errorMessage as string | null,
+      isTrivial: (r.isTrivial as boolean) ?? false,
       createdAt: r.createdAt as Date,
       authorName: (r.authorName as string) ?? 'Unknown',
       committedAt: (r.committedAt as Date) ?? (r.createdAt as Date),

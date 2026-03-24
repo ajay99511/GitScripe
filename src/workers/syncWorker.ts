@@ -101,7 +101,13 @@ export async function runSync(repoId: string, deps: SyncWorkerDeps): Promise<num
         logger.warn({ sha: commit.sha, error }, 'Failed to store diff (will retry in worker)');
       }
 
-      // Step 3: Enqueue for pipeline processing
+      // Step 3: Enqueue for pipeline processing — skip if already done or failed
+      const existingSummary = await prisma.summary.findUnique({ where: { commitSha: commit.sha } });
+      if (existingSummary && (existingSummary.status === 'done' || existingSummary.status === 'failed')) {
+        logger.debug({ sha: commit.sha, status: existingSummary.status }, 'Skipping already-processed commit');
+        continue;
+      }
+
       await commitQueue.add(
         `process-${commit.sha}`,
         {

@@ -40,6 +40,7 @@ export default defineConfig({
       '/github':    { target: 'http://localhost:3030', changeOrigin: true },
       '/summaries': { target: 'http://localhost:3030', changeOrigin: true },
       '/chat':      { target: 'http://localhost:3030', changeOrigin: true },
+      '/config':    { target: 'http://localhost:3030', changeOrigin: true },
       '/socket.io': { target: 'http://localhost:3030', changeOrigin: true, ws: true },
     },
   },

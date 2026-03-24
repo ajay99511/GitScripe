@@ -93,6 +93,7 @@ model Summary {
   processingMs    Int?
   status          SummaryStatus @default(pending)
   errorMessage    String?       @db.Text
+  isTrivial       Boolean       @default(false)
   createdAt       DateTime      @default(now())
 
   embedding       Unsupported("vector")?

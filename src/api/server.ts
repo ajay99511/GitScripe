@@ -17,6 +17,7 @@ import { commitRoutes } from './routes/commits.js';
 import { summaryRoutes } from './routes/summaries.js';
 import { chatRoutes } from './routes/chat.js';
 import { githubRoutes } from './routes/github.js';
+import { configRoutes } from './routes/config.js';
 
 import type { RepoManager } from '../services/RepoManager.js';
 import type { SummaryStore } from '../services/SummaryStore.js';
@@ -24,6 +25,7 @@ import type { ChatService } from '../services/ChatService.js';
 import type { GitHubConnector } from '../connectors/GitHubConnector.js';
 import type { DiffStorage } from '../connectors/DiffStorage.js';
 import type { CommitJobData } from '../queues/CommitQueue.js';
+import type { AppConfig } from '../config/index.js';
 
 export interface ServerDeps {
   prisma: PrismaClient;
@@ -34,6 +36,7 @@ export interface ServerDeps {
   diffStorage: DiffStorage;
   commitQueue: Queue<CommitJobData>;
   port: number;
+  config: AppConfig;
 }
 
 export async function createServer(deps: ServerDeps) {
@@ -46,6 +49,7 @@ export async function createServer(deps: ServerDeps) {
     diffStorage,
     commitQueue,
     port,
+    config,
   } = deps;
 
   // ─── Fastify Instance ──────────────────────────────────
@@ -103,11 +107,13 @@ export async function createServer(deps: ServerDeps) {
 
   await commitRoutes(fastify, { prisma });
 
-  await summaryRoutes(fastify, { summaryStore, prisma });
+  await summaryRoutes(fastify, { summaryStore, prisma, commitQueue });
 
   await chatRoutes(fastify, { chatService });
 
   await githubRoutes(fastify, { githubConnector, repoManager, prisma });
+
+  await configRoutes(fastify, { config });
 
   // ─── Serve React SPA static assets ────────────────────
 
@@ -129,6 +135,7 @@ export async function createServer(deps: ServerDeps) {
         !request.url.startsWith('/chat') &&
         !request.url.startsWith('/health') &&
         !request.url.startsWith('/admin') &&
+        !request.url.startsWith('/config') &&
         !request.url.startsWith('/socket.io')
       ) {
         return reply.sendFile('index.html');

@@ -41,6 +41,17 @@ export function createChatModel(config: AppConfig): BaseChatModel {
         temperature: 0.3,
       });
 
+    case 'deepseek':
+      // DeepSeek uses an OpenAI-compatible API — no extra package needed
+      return new ChatOpenAI({
+        modelName: config.llmModel,
+        apiKey: config.deepseekApiKey,
+        configuration: {
+          baseURL: 'https://api.deepseek.com',
+        },
+        temperature: 0.3,
+      });
+
     default:
       throw new Error(`Unsupported LLM provider: ${config.llmProvider}`);
   }

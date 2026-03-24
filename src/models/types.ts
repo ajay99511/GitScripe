@@ -66,6 +66,7 @@ export interface SummaryInfo {
   processingMs: number | null;
   status: 'pending' | 'processing' | 'done' | 'failed';
   errorMessage: string | null;
+  isTrivial: boolean;
   embedding?: number[];
   createdAt: Date;
   // Joined from commit record

@@ -10,6 +10,8 @@ export const CommitJobSchema = z.object({
   owner: z.string(),
   repo: z.string(),
   branch: z.string(),
+  force: z.boolean().default(false),
+  overrideModel: z.string().optional(),
 });
 
 export type CommitJobData = z.infer<typeof CommitJobSchema>;

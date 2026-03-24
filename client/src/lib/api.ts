@@ -1,4 +1,5 @@
 // Mirrored TypeScript types matching backend models
+
 export interface DiscoveredRepo {
   owner: string;
   name: string;
@@ -43,6 +44,9 @@ export interface SummaryInfo {
   extractedConcepts: string[];
   htmlUrl: string;
   status: 'pending' | 'processing' | 'done' | 'failed';
+  isTrivial: boolean;
+  errorMessage: string | null;
+  llmModel: string | null;
   filesChanged: string[];
   additions: number;
   deletions: number;
@@ -102,6 +106,15 @@ export const api = {
         `/repos/${repoId}/summaries?${qs}`
       );
     },
+    resummarize: (repoId: string, body: { shas: string[]; model: string }) =>
+      apiFetch<{ enqueued: number }>(`/repos/${repoId}/summaries/resummarize`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+  },
+  config: {
+    models: () =>
+      apiFetch<{ provider: string; models: string[]; default: string }>('/config/models'),
   },
   chat: {
     query: (question: string, repoId: string) =>

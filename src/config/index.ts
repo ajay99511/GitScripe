@@ -6,7 +6,7 @@ const ConfigSchema = z.object({
   githubToken: z.string().min(1, 'GITHUB_TOKEN is required'),
 
   // LLM Chat
-  llmProvider: z.enum(['openai', 'anthropic', 'gemini', 'ollama']).default('openai'),
+  llmProvider: z.enum(['openai', 'anthropic', 'gemini', 'ollama', 'deepseek']).default('openai'),
   llmModel: z.string().default('gpt-4o-mini'),
   llmBaseUrl: z.string().optional(),
   
@@ -18,6 +18,7 @@ const ConfigSchema = z.object({
   openaiApiKey: z.string().optional(),
   anthropicApiKey: z.string().optional(),
   geminiApiKey: z.string().optional(),
+  deepseekApiKey: z.string().optional(),
   ollamaBaseUrl: z.string().default('http://localhost:11434'),
 
   // Database
@@ -60,6 +61,7 @@ function loadConfig() {
     openaiApiKey: process.env.OPENAI_API_KEY,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     geminiApiKey: process.env.GEMINI_API_KEY,
+    deepseekApiKey: process.env.DEEPSEEK_API_KEY,
     ollamaBaseUrl: process.env.OLLAMA_BASE_URL,
     databaseUrl: process.env.DATABASE_URL,
     redisUrl: process.env.REDIS_URL,
